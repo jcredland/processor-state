@@ -110,101 +110,37 @@ private:
 };
 
 
-/**
-*/
+/** */
 class ProcessorState::Parameter : public AudioProcessorParameterWithID
 {
 public:
-    Parameter (
-        const String& parameterID, const String& paramName, const String& labelText,
-        NormalisableRange<float> r, float defaultVal,
-        std::function<String (float)> valueToText,
-        std::function<float (const String&)> textToValue,
-        bool meta,
-        bool automatable,
-        bool discrete)
-        :
-        AudioProcessorParameterWithID (parameterID, paramName, labelText),
-        range (r), value (defaultVal),
-        defaultValue (defaultVal), valueToTextFunction (valueToText), textToValueFunction (textToValue),
-        listenersNeedCalling (true),
-        isMetaParam (meta),
-        isAutomatableParam (automatable),
-        isDiscreteParam (discrete)
-    {
-        needsUpdate.set (1);
-    }
+    ~Parameter ();
 
-    ~Parameter()
-    {
-        // should have detached all callbacks before destroying the parameters!
-        jassert (listeners.size() <= 1);
-    }
+    float getValue () const override;
+    float getDefaultValue () const override;
+    float getValueForText (const String& text) const override;
+    String getText (float v, int length) const override;
+    int getNumSteps () const override;
+    void setValue (float newValue) override;
 
-    float getValue() const override { return range.convertTo0to1 (value); }
-    float getDefaultValue() const override { return range.convertTo0to1 (defaultValue); }
-
-    float getValueForText (const String& text) const override
-    {
-        return range.convertTo0to1 (textToValueFunction != nullptr ? textToValueFunction (text)
-            : text.getFloatValue());
-    }
-
-    String getText (float v, int length) const override
-    {
-        return valueToTextFunction != nullptr ? valueToTextFunction (range.convertFrom0to1 (v))
-            : AudioProcessorParameter::getText (v, length);
-    }
-
-    int getNumSteps() const override
-    {
-        if (range.interval > 0)
-            return (static_cast<int> ((range.end - range.start) / range.interval) + 1);
-
-        return AudioProcessor::getDefaultNumParameterSteps();
-    }
-
-    void setValue (float newValue) override
-    {
-        newValue = range.snapToLegalValue (range.convertFrom0to1 (newValue));
-
-        if (value != newValue || listenersNeedCalling)
-        {
-            value = newValue;
-
-            //listeners.call (&AudioProcessorValueTreeState::Listener::parameterChanged, paramID, value);
-            listenersNeedCalling = false;
-
-            needsUpdate.set (1);
-        }
-    }
-
-    /**
-    * Can be called from ANY thread.
-    */
-    void setUnnormalisedValue (float newUnnormalisedValue)
-    {
-        if (value != newUnnormalisedValue)
-        {
-            const float newValue = range.convertTo0to1 (newUnnormalisedValue);
-            setValueNotifyingHost (newValue);
-        }
-    }
+    /** Can be called from ANY thread.  */
+    void setUnnormalisedValue (float newUnnormalisedValue);
 
 
-    bool isMetaParameter() const override { return isMetaParam; }
-    bool isAutomatable() const override { return isAutomatableParam; }
-    bool isDiscrete() const override { return isDiscreteParam; }
+    bool isMetaParameter () const override;
+    bool isAutomatable () const override;
+    bool isDiscrete () const override;
 
     class Listener
     {
     public:
-        virtual ~Listener() {}
+        virtual ~Listener ();
+        /** Will be called on the message thread */
         virtual void parameterChanged(const String & parameterId, float newValue) = 0;
     };
 
-    void addListener(Listener * l) { listeners.add(l); }
-    void removeListener(Listener * l) { listeners.remove(l); }
+    void addListener (Listener* l);
+    void removeListener (Listener* l);
 
     NormalisableRange<float> range;
     float value;
@@ -212,11 +148,12 @@ public:
 
 private:
     friend class ProcessorState;
-    void callMessageThreadListeners()
-    {
-        jassert(MessageManager::getInstance()->isThisTheMessageThread());
-        listeners.call(&Listener::parameterChanged, paramID, value);
-    }
+
+    Parameter (const String& parameterID, const String& paramName, const String& labelText,
+        NormalisableRange<float> r, float defaultVal, std::function<String  (float)> valueToText,
+        std::function<float  (const String&)> textToValue, bool meta, bool automatable, bool discrete);
+
+    void callMessageThreadListeners ();
 
     ListenerList<Listener> listeners;
     std::function<String (float)> valueToTextFunction;

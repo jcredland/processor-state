@@ -118,3 +118,110 @@ void ProcessorState::timerCallback ()
     startTimer(anythingUpdated ? 1000 / 50
         : jlimit(50, 500, getTimerInterval() + 20));
 }
+
+ProcessorState::Parameter::~Parameter ()
+{
+    // should have detached all callbacks before destroying the parameters!
+    jassert (listeners.size() <= 1);
+}
+
+float ProcessorState::Parameter::getValue () const
+{
+    return range.convertTo0to1(value);
+}
+
+float ProcessorState::Parameter::getDefaultValue () const
+{
+    return range.convertTo0to1(defaultValue);
+}
+
+int ProcessorState::Parameter::getNumSteps () const
+{
+    if (range.interval > 0)
+        return (static_cast<int>((range.end - range.start) / range.interval) + 1);
+
+    return AudioProcessor::getDefaultNumParameterSteps();
+}
+
+void ProcessorState::Parameter::setValue (float newValue)
+{
+    newValue = range.snapToLegalValue(range.convertFrom0to1(newValue));
+
+    if (value != newValue || listenersNeedCalling)
+    {
+        value = newValue;
+
+        //listeners.call (&AudioProcessorValueTreeState::Listener::parameterChanged, paramID, value);
+        listenersNeedCalling = false;
+
+        needsUpdate.set(1);
+    }
+}
+
+void ProcessorState::Parameter::setUnnormalisedValue (float newUnnormalisedValue)
+{
+    if (value != newUnnormalisedValue)
+    {
+        const float newValue = range.convertTo0to1(newUnnormalisedValue);
+        setValueNotifyingHost(newValue);
+    }
+}
+
+bool ProcessorState::Parameter::isMetaParameter () const
+{
+    return isMetaParam;
+}
+
+bool ProcessorState::Parameter::isAutomatable () const
+{
+    return isAutomatableParam;
+}
+
+bool ProcessorState::Parameter::isDiscrete () const
+{
+    return isDiscreteParam;
+}
+
+ProcessorState::Parameter::Listener::~Listener ()
+{
+}
+
+void ProcessorState::Parameter::addListener (Listener* l)
+{
+    listeners.add(l);
+}
+
+void ProcessorState::Parameter::removeListener (Listener* l)
+{
+    listeners.remove(l);
+}
+
+void ProcessorState::Parameter::callMessageThreadListeners ()
+{
+    jassert(MessageManager::getInstance()->isThisTheMessageThread());
+    listeners.call(&Listener::parameterChanged, paramID, value);
+}
+
+float ProcessorState::Parameter::getValueForText (const String& text) const
+{
+    return range.convertTo0to1(textToValueFunction != nullptr ? textToValueFunction(text)
+                                   : text.getFloatValue());
+}
+
+String ProcessorState::Parameter::getText (float v, int length) const
+{
+    return valueToTextFunction != nullptr ? valueToTextFunction(range.convertFrom0to1(v))
+               : AudioProcessorParameter::getText(v, length);
+}
+
+ProcessorState::Parameter::Parameter (const String& parameterID, const String& paramName, const String& labelText, NormalisableRange<float> r, float defaultVal, std::function<String (float)> valueToText, std::function<float (const String&)> textToValue, bool meta, bool automatable, bool discrete):
+    AudioProcessorParameterWithID(parameterID, paramName, labelText),
+    range(r), value(defaultVal),
+    defaultValue(defaultVal), valueToTextFunction(valueToText), textToValueFunction(textToValue),
+    listenersNeedCalling(true),
+    isMetaParam(meta),
+    isAutomatableParam(automatable),
+    isDiscreteParam(discrete)
+{
+    needsUpdate.set(1);
+}
