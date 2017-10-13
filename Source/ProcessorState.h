@@ -223,6 +223,20 @@ public:
 
     String getDataID () const { return dataID; }
 
+    class Listener
+    {
+    public:
+        virtual ~Listener() {}
+        /** 
+         * Will only be called on the message thread. Use to update your UI
+         * object when the state has changed (typically as a result of the host
+         * calling setStateInformation).
+         */
+        virtual void processorStateDataChanged(const String & dataID) = 0;
+    };
+
+    void addListener(Listener * l) { listeners.add(l); }
+    void removeListener(Listener * l) { listeners.remove(l); }
 protected:
 
     /** Save the contents of your implementation to a ValueTree.
@@ -244,18 +258,14 @@ protected:
      */
     virtual bool deserialize(ValueTree valuetree) = 0;
 
-    class Listener
+    /**
+     * Called when a preset is loaded that doesn't include this data.  Use it to
+     * clear the state to a sensible default.
+     */
+    virtual void setToDefaultState ()
     {
-    public:
-        virtual ~Listener() {}
-        /** 
-         * Will only be called on the message thread. Use to update your UI
-         * object when the state has changed (typically as a result of the host
-         * calling setStateInformation).
-         */
-        virtual void processorStateDataChanged(const String & dataID) = 0;
-    };
-
+        jassertfalse;
+    }
     /** 
      * Call from your implementation when the data has changed (e.g. the user
      * changed the UI and the state may need saving.  
@@ -273,8 +283,6 @@ private:
         listeners.call(&Listener::processorStateDataChanged, dataID);
     }
 
-    void addListener(Listener * l) { listeners.add(l); }
-    void removeListener(Listener * l) { listeners.remove(l); }
     ProcessorState & state;
     ListenerList<Listener> listeners;
     String dataID;
@@ -303,14 +311,15 @@ public:
     /** 
      * Typically called from the UI when the user selects another file .
      */
-    void setFile(const File & newFile)
+    void setFile(const File & newFile, NotificationType uiNotificationType)
     {
         ScopedLock l(criticalSection);
 
         if (file != newFile)
         {
             file = newFile;
-            notifyChanged(dontSendNotification);
+            actionOnChange(file);
+            notifyChanged(uiNotificationType);
         }
     }
 

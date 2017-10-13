@@ -26,6 +26,15 @@ ProcessorstateAudioProcessor::ProcessorstateAudioProcessor()
 #endif
 {
     volumeValue = &state.createAndAddParameter("volume", "volume", "Volume", { 0.0, 2.0 }, { 1.0 }, nullptr, nullptr)->value;
+
+    auto onFileUpdated = [this](const File & file)
+    {
+        // some sort of thread-safe file action here!
+        DBG("loading ... " + file.getFullPathName());
+
+    };
+
+    state.addData(new ProcessorStateFile(state, "file", onFileUpdated));
 }
 
 ProcessorstateAudioProcessor::~ProcessorstateAudioProcessor()

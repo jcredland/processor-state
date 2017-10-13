@@ -37,8 +37,11 @@ ProcessorState::Data* ProcessorState::getData (StringRef dataID) const noexcept
         if (item->getDataID() == dataID)
             return item;
 
+    /* It's probably fatal if you can't find this item, all ProcessorState::Data
+     * objects should have been set up by now
+     */
+    jassertfalse;
     return nullptr;
-
 }
 
 ProcessorState::Parameter* ProcessorState::getParameter (StringRef parameterID) const noexcept
@@ -97,25 +100,37 @@ ValueTree ProcessorState::toValueTree () const
 
 void ProcessorState::load (ValueTree root) const
 {
-    auto parametersTree = root.getOrCreateChildWithName("parameters", nullptr);
-
-    forEachParameter([parametersTree](int, Parameter * p)
     {
-        auto child = parametersTree.getChildWithProperty("id", p->paramID);
+        auto parametersTree = root.getOrCreateChildWithName("parameters", nullptr);
 
-        if (child.isValid())
-            p->setUnnormalisedValue(child["value"]);
-        else
-            p->setUnnormalisedValue(p->getDefaultValue());
-    });
+        forEachParameter([parametersTree](int, Parameter * p)
+        {
+            auto child = parametersTree.getChildWithProperty("id", p->paramID);
 
-    auto dataTree = root.getOrCreateChildWithName("data", nullptr);
+            if (child.isValid())
+                p->setUnnormalisedValue(child["value"]);
+            else
+                p->setUnnormalisedValue(p->getDefaultValue());
+        });
+    }
 
-    for (auto * d : dataItems)
     {
-        auto child = parametersTree.getChildWithProperty("__id", d->getDataID());
-        auto result = d->setValueFromNewState(child);
-        jassert(result);
+        auto dataTree = root.getOrCreateChildWithName("data", nullptr);
+
+        for (auto * d : dataItems)
+        {
+            auto child = dataTree.getChildWithProperty("__id", d->getDataID());
+
+            if (!child.isValid())
+            {
+                d->setToDefaultState();
+            }
+            else
+            {
+                auto result = d->setValueFromNewState(child);
+                jassert(result);
+            }
+        }
     }
 }
 
