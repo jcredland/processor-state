@@ -164,13 +164,9 @@ void ProcessorState::Parameter::setValue (float newValue)
 {
     newValue = range.snapToLegalValue(range.convertFrom0to1(newValue));
 
-    if (value != newValue || listenersNeedCalling)
+    if (value != newValue)
     {
         value = newValue;
-
-        //listeners.call (&AudioProcessorValueTreeState::Listener::parameterChanged, paramID, value);
-        listenersNeedCalling = false;
-
         needsUpdate.store(1, std::memory_order_release);
     }
 }
@@ -235,7 +231,6 @@ ProcessorState::Parameter::Parameter (const String& parameterID, const String& p
     AudioProcessorParameterWithID(parameterID, paramName, labelText),
     range(r), value(defaultVal),
     defaultValue(defaultVal), valueToTextFunction(valueToText), textToValueFunction(textToValue),
-    listenersNeedCalling(true),
     isMetaParam(meta),
     isAutomatableParam(automatable),
     isDiscreteParam(discrete)

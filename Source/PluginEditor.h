@@ -23,14 +23,13 @@ public:
     ProcessorstateAudioProcessorEditor (ProcessorstateAudioProcessor&);
     ~ProcessorstateAudioProcessorEditor();
 
-    //==============================================================================
     void paint (Graphics&) override;
     void resized() override;
 
 private:
     ProcessorstateAudioProcessor& processor;
     Slider volumeSlider;
-    SliderAttachment volumeAttachment{ processor.state, "volume", volumeSlider };
+    ProcessorState::SliderAttachment volumeAttachment{ processor.state, "volume", volumeSlider };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProcessorstateAudioProcessorEditor)
 };

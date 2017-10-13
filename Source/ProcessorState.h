@@ -129,23 +129,36 @@ private:
 };
 
 
-/** */
+/** 
+ * An implementation of AudioProcessorParameterWithID for the ProcessorState.  Normally
+ * you won't need to interact with this object directly.  Instead use
+ * getRawParameterValue(), createAndAddParameter() and the SliderAttachment class.
+ * 
+ * You may need to use this if you are creating new Attachment classes.
+ */
 class ProcessorState::Parameter : public AudioProcessorParameterWithID
 {
 public:
     ~Parameter ();
 
+    /** Returns the normalized value */
     float getValue () const override;
+
+    /** Returns the unnormalized default value */
     float getDefaultValue () const override;
+
     float getValueForText (const String& text) const override;
     String getText (float v, int length) const override;
+
     int getNumSteps () const override;
+
+    /** Set the normalized value */
     void setValue (float newValue) override;
 
-    NormalisableRange<float> getRange() const { return range; }
-
-    /** Can be called from ANY thread.  */
+    /** Set the unnormalized value.  Can be called from any thread.  */
     void setUnnormalisedValue (float newUnnormalisedValue);
+
+    NormalisableRange<float> getRange() const { return range; }
 
     bool isMetaParameter () const override;
     bool isAutomatable () const override;
@@ -162,12 +175,10 @@ public:
     void addListener (Listener* l);
     void removeListener (Listener* l);
 
-    float value;
+    float value; /**< should this be a std::atomic<float> really? */
 
 private:
-    NormalisableRange<float> range;
     friend class ProcessorState;
-    float defaultValue;
 
     Parameter (const String& parameterID, const String& paramName, const String& labelText,
         NormalisableRange<float> r, float defaultVal, std::function<String  (float)> valueToText,
@@ -175,20 +186,20 @@ private:
 
     void callMessageThreadListeners ();
 
+    NormalisableRange<float> range;
+    float defaultValue;
     ListenerList<Listener> listeners;
     std::function<String (float)> valueToTextFunction;
     std::function<float (const String&)> textToValueFunction;
     std::atomic<int> needsUpdate;
-    bool listenersNeedCalling;
     const bool isMetaParam, isAutomatableParam, isDiscreteParam;
-
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Parameter)
 };
 
 /**
 * Connect a slider to a parameter.
 */
-class SliderAttachment : Slider::Listener, ProcessorState::Parameter::Listener
+class ProcessorState::SliderAttachment : Slider::Listener, Parameter::Listener
 {
 public:
     SliderAttachment (ProcessorState& state, const String& paramID, Slider& slider)
