@@ -12,17 +12,11 @@
 #include "JuceHeader.h"
 
 /**
-* Like AudioProcessorValueTreeState only without
-* - the horrible long name :)
-* - the threading problems :)
-* - the undo feature :(
-* 
-* And with:
-* - The ability to store arbitrary data safely in the preset/state information
+* Manages access to audio processor configuration information including
+* parameters and non-parameter data.
 *
-* SPEC DETAILS It must allow data to be loaded from any thread, and without the
-* use of the message thread provide all necessary information to the audio
-* processor. Some hosts may lock up the message thread when rendering.
+* 
+* 
 */
 class ProcessorState
     :
@@ -58,6 +52,9 @@ public:
     @see AudioProcessorParameter::isDiscrete
 
     @returns the parameter object that was created
+
+    THREADING SPEC: All calls to createAndAddParameter must take place during the
+    constructor of the PluginProcessor.
     */
     Parameter* createAndAddParameter (const String& parameterID,
         const String& parameterName,
@@ -72,9 +69,11 @@ public:
 
 
     /** 
-     * Add a data item which will be saved and loaded with the plugin parameters. 
+     * Add a data item which will be saved and loaded with the plugin
+     * parameters. 
      * 
-     * addData calls should all be completed before the end of your AudioProcessor
+     * THREADING SPEC: For the other functions to be threadsafe addData calls
+     * should all be completed before the end of your AudioProcessor
      * constructor. 
      */
     void addData(Data * data);
@@ -96,8 +95,8 @@ public:
     Parameter* getParameter (StringRef parameterID) const noexcept;
 
     /** Returns a pointer to a floating point representation of a particular
-    * parameter which a realtime process can read to find out its current value.
-    */
+      * parameter which a realtime process can read to find out its current value.
+      */
     float* getRawParameterValue (StringRef parameterID) const noexcept;
 
     /**
@@ -108,6 +107,10 @@ public:
     /**
     * Thread-safe restoration of plugin state from valuetree.  If values aren't
     * included we set them to the default value for the parameter.
+    *
+    * THREADING SPEC: It must allow data to be loaded from any thread and,
+    * without the use of the message thread (which may be locked by the host),
+    * provide all necessary information to the audio processor.
     */
     void load(ValueTree) const;
 
@@ -116,6 +119,8 @@ public:
      * 
      * Call from your AudioProcessor::getStateInformation call. Use instead of 
      * ProcessorState::toValueTree()
+     *
+     * THREADING SPEC: supports being called from any thread.
      */
     void getStateInformation (MemoryBlock& destData) const;
 
@@ -161,10 +166,18 @@ public:
 
     int getNumSteps () const override;
 
-    /** Set the normalized value */
+    /** 
+     * Set the normalized value. Called by the host.
+     * 
+     * THREADING SPEC: Can be called from any thread.
+     */
     void setValue (float newValue) override;
 
-    /** Set the unnormalised value.  Can be called from any thread.  */
+    /** 
+     * Set the unnormalised value.  
+     *
+     * THREADING SPEC: Can be called from any thread.  
+     */
     void setUnnormalisedValue (float newUnnormalisedValue);
 
     NormalisableRange<float> getRange() const { return range; }
@@ -177,7 +190,13 @@ public:
     {
     public:
         virtual ~Listener ();
-        /** Will only be called on the message thread */
+        /** 
+         * Called when the host changes the parameter value, use this to trigger
+         * a UI update.  Usually this is done for you using an Attachment
+         * object such as ProcessorState::SliderAttachment
+         * 
+         * THREADING SPEC: Will only be called on the message thread 
+         */
         virtual void parameterChanged(const String & parameterId, float newValue) = 0;
     };
 
@@ -228,60 +247,72 @@ public:
     public:
         virtual ~Listener() {}
         /** 
-         * Will only be called on the message thread. Use to update your UI
-         * object when the state has changed (typically as a result of the host
-         * calling setStateInformation).
+         * THEADING SPEC: Will only be called on the message thread. Use to
+         * update your UI object when the state has changed (typically as a
+         * result of the host calling setStateInformation).
          */
         virtual void processorStateDataChanged(const String & dataID) = 0;
     };
 
     void addListener(Listener * l) { listeners.add(l); }
     void removeListener(Listener * l) { listeners.remove(l); }
-protected:
 
+protected:
     /** Save the contents of your implementation to a ValueTree.
      *
      * This function may be called on any thread. It should serialize the 
      * state of your ProcessorState::Data object into a ValueTree.
+     *
+     * THREADING SPEC
+     * - This function may be called on any thread.
      */
     virtual ValueTree serialize() = 0;
 
     /** Called with data you previously created with serialize()
      *
+     * It should not return until your plugin is ready to play with the new
+     * data.
+     *
+     * It should:
+     *  - store the data
+     *  - reconfigure the processor as needed using the data
+     *  - notify the UI to update by calling Data::notifyChanged(...).
+     *
+     * THREADING SPEC
      * - This function may be called on any thread.
      * - You will need to use a lock or other thread safety mechanisms when
      *   changing certain types of data.  
      * - You should not rely on the availablity of the message thread for
      *   handling updates.  
-     * - It should not return until your plugin is ready to play with the new
-     *   data.
      */
     virtual bool deserialize(ValueTree valuetree) = 0;
 
     /**
      * Called when a preset is loaded that doesn't include this data.  Use it to
-     * clear the state to a sensible default.
+     * clear the state to a sensible default.    The implementation will
+     * probably be very similar to the deserialize function only with some
+     * default settings (includign saving, reconfiguring and notifying the UI).
+     *
+     * THREADING SPEC
+     * - This function may be called on any thread.
      */
-    virtual void setToDefaultState ()
-    {
-        jassertfalse;
-    }
+    virtual void setToDefaultState () = 0;
+
     /** 
      * Call from your implementation when the data has changed (e.g. the user
      * changed the UI and the state may need saving.  
+     *
+     * THREADING SPEC: may be called from any thread**.
+     * 
+     * ** need to check updateHostDisplay
      */
     void notifyChanged (NotificationType notifyMessageThreadListeners);
 
 private:
     friend class ProcessorState;
 
-    /** @internal - like deserialize but with a notification to the UI */
-    bool setValueFromNewState (ValueTree data);
-
-    void handleAsyncUpdate() override
-    {
-        listeners.call(&Listener::processorStateDataChanged, dataID);
-    }
+    /** @internal - triggers a call to the listeners. */
+    void handleAsyncUpdate () override;
 
     ProcessorState & state;
     ListenerList<Listener> listeners;
@@ -308,9 +339,7 @@ public:
     actionOnChange(actionOnChange)
     {}
 
-    /** 
-     * Typically called from the UI when the user selects another file .
-     */
+    /** Call from the UI when the user selects another file. */
     void setFile(const File & newFile, NotificationType uiNotificationType)
     {
         ScopedLock l(criticalSection);
@@ -323,7 +352,7 @@ public:
         }
     }
 
-    /** Typically called from the UI to display the current file name to the user. */
+    /** Call from the UI to display the current file name to the user. */
     File getFile() const
     {
         ScopedLock l(criticalSection);
@@ -331,17 +360,17 @@ public:
     }
 
 protected:
+    void setToDefaultState () override
+    {
+        setFile(File(), sendNotification);
+    }
+
     bool deserialize (ValueTree valuetree) override
     {
         if (valuetree.getType() != Identifier("ProcessorStateFile"))
             return false;
 
-        ScopedLock l(criticalSection);
-        file = File(valuetree["file"]);
-
-        /* here we need to do some action with the file before returning, maybe
-        load it? */
-        actionOnChange(file);
+        setFile(File(valuetree["file"].toString()), sendNotification);
 
         return true;
     }

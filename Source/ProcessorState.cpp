@@ -52,8 +52,9 @@ ProcessorState::Parameter* ProcessorState::getParameter (StringRef parameterID) 
     {
         AudioProcessorParameter* const ap = processor.getParameters().getUnchecked(i);
 
-        // When using this class, you must allow it to manage all the parameters in your AudioProcessor, and
-        // not add any parameter objects of other types!
+        // When using this class, you must allow it to manage all the parameters
+        // in your AudioProcessor, and not add any parameter objects of other
+        // types!
         jassert (dynamic_cast<Parameter*> (ap) != nullptr);
 
         Parameter* const p = static_cast<Parameter*>(ap);
@@ -95,6 +96,8 @@ ValueTree ProcessorState::toValueTree () const
         dataTree.addChild(child, -1, nullptr);
     }
 
+    DBG(root.toXmlString());
+
     return root;
 }
 
@@ -127,8 +130,9 @@ void ProcessorState::load (ValueTree root) const
             }
             else
             {
-                auto result = d->setValueFromNewState(child);
+                auto result = d->deserialize(child);
                 jassert(result);
+                (void)result; // some future global error handling
             }
         }
     }
@@ -203,7 +207,7 @@ float ProcessorState::Parameter::getDefaultValue () const
 int ProcessorState::Parameter::getNumSteps () const
 {
     if (range.interval > 0)
-        return (static_cast<int>((range.end - range.start) / range.interval) + 1);
+        return static_cast<int>((range.end - range.start) / range.interval) + 1;
 
     return AudioProcessor::getDefaultNumParameterSteps();
 }
@@ -271,15 +275,9 @@ void ProcessorState::Data::notifyChanged (NotificationType notifyMessageThreadLi
     state.notifyChangedData();
 }
 
-bool ProcessorState::Data::setValueFromNewState (ValueTree data)
+void ProcessorState::Data::handleAsyncUpdate ()
 {
-    if (deserialize(data))
-    {
-        triggerAsyncUpdate();
-        return true;
-    }
-
-    return false;
+    listeners.call(&Listener::processorStateDataChanged, dataID);
 }
 
 float ProcessorState::Parameter::getValueForText (const String& text) const
