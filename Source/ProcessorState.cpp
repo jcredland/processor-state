@@ -162,7 +162,6 @@ int ProcessorState::Parameter::getNumSteps () const
 
 void ProcessorState::Parameter::setValue (float newValue)
 {
-    DBG("setValue" + String(newValue));
     newValue = range.snapToLegalValue(range.convertFrom0to1(newValue));
 
     if (value != newValue || listenersNeedCalling)
@@ -178,7 +177,6 @@ void ProcessorState::Parameter::setValue (float newValue)
 
 void ProcessorState::Parameter::setUnnormalisedValue (float newUnnormalisedValue)
 {
-    DBG("setUnnormalisedValue" + String(newUnnormalisedValue));
     if (value != newUnnormalisedValue)
     {
         const float newValue = range.convertTo0to1(newUnnormalisedValue);
