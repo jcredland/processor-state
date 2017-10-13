@@ -68,7 +68,7 @@ ValueTree ProcessorState::toValueTree () const
         parametersTree.addChild(child, -1, nullptr);
     });
 
-    return parametersTree;
+    return root;
 }
 
 void ProcessorState::load (ValueTree root) const
@@ -84,6 +84,21 @@ void ProcessorState::load (ValueTree root) const
         else
             p->setUnnormalisedValue(p->getDefaultValue());
     });
+}
+
+void ProcessorState::getStateInformation (MemoryBlock& destData) const
+{
+    ScopedPointer<XmlElement> xml (toValueTree().createXml());
+    AudioProcessor::copyXmlToBinary (*xml, destData);
+}
+
+void ProcessorState::setStateInformation (const void* data, int sizeInBytes)
+{
+    ScopedPointer<XmlElement> xmlState (AudioProcessor::getXmlFromBinary (data, sizeInBytes));
+
+    if (xmlState != nullptr)
+        if (xmlState->hasTagName ("state"))
+            load(ValueTree::fromXml (*xmlState));
 }
 
 void ProcessorState::forEachParameter (std::function<void(int, Parameter*)> func) const
@@ -147,6 +162,7 @@ int ProcessorState::Parameter::getNumSteps () const
 
 void ProcessorState::Parameter::setValue (float newValue)
 {
+    DBG("setValue" + String(newValue));
     newValue = range.snapToLegalValue(range.convertFrom0to1(newValue));
 
     if (value != newValue || listenersNeedCalling)
@@ -162,6 +178,7 @@ void ProcessorState::Parameter::setValue (float newValue)
 
 void ProcessorState::Parameter::setUnnormalisedValue (float newUnnormalisedValue)
 {
+    DBG("setUnnormalisedValue" + String(newUnnormalisedValue));
     if (value != newUnnormalisedValue)
     {
         const float newValue = range.convertTo0to1(newUnnormalisedValue);

@@ -24,13 +24,17 @@
 * 
 * I want to add a feature that allows non-parameter data to be set, saved, loaded
 * and sent safely to the audio thread, but it's not here yet!
+* Also, this should call AudioProcessor::updateHostDisplay() 
 */
 class ProcessorState
     :
     public Timer
 {
 public:
-    explicit ProcessorState (AudioProcessor& processor) : processor(processor) {}
+    explicit ProcessorState (AudioProcessor& processor) : processor(processor)
+    {
+        startTimerHz(10);
+    }
 
     class Parameter;
     class SliderAttachment;
@@ -101,6 +105,21 @@ public:
     * included we set them to the default value for the parameter.
     */
     void load(ValueTree) const;
+
+    /** 
+     * Save the ProcessorState to the memory block.
+     * 
+     * Call from your AudioProcessor::getStateInformation call. 
+     */
+    void getStateInformation (MemoryBlock& destData) const;
+
+    /** 
+     * Load the ProcessorState from the memory block.
+     * 
+     * Call from your AudioProcessor::setStateInformation call. 
+     */
+    void setStateInformation (const void* data, int sizeInBytes);
+
 
 private:
     void forEachParameter (std::function<void(int, Parameter*)> func) const;
