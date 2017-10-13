@@ -333,6 +333,11 @@ private:
 class ProcessorStateFile : public ProcessorState::Data
 {
 public:
+    /**
+     * @param state           the shared ProcessorState
+     * @param dataID          the dataID for this ProcessorState::Data object
+     * @param actionOnChange  this might be called on any thread
+     */
     ProcessorStateFile(ProcessorState & state, const String & dataID, std::function<void(const File & action)> actionOnChange)
     : 
     Data(state, dataID), 

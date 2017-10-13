@@ -32,6 +32,26 @@ ProcessorstateAudioProcessor::ProcessorstateAudioProcessor()
         // some sort of thread-safe file action here!
         DBG("loading ... " + file.getFullPathName());
 
+        AudioFormatManager afm;
+        afm.registerBasicFormats();
+        ScopedPointer<AudioFormatReader> reader = afm.createReaderFor(file);
+
+        if (reader)
+        {
+            ScopedPointer<AudioSampleBuffer> buffer = new AudioBuffer<float>(reader->numChannels, int(reader->lengthInSamples));
+            reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
+
+            {
+                ScopedLock lock(processBlockLock);
+                sample = buffer.release();
+
+                DBG("loaded ok");
+            }
+        }
+        else
+        {
+            DBG("load failed");
+        }
     };
 
     state.addData(new ProcessorStateFile(state, "file", onFileUpdated));
@@ -142,6 +162,9 @@ bool ProcessorstateAudioProcessor::isBusesLayoutSupported (const BusesLayout& la
 
 void ProcessorstateAudioProcessor::processBlock (AudioSampleBuffer& buffer, MidiBuffer& midiMessages)
 {
+    if (!processBlockLock.tryEnter())
+        return;
+
     ScopedNoDenormals noDenormals;
     const int totalNumInputChannels  = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
@@ -161,6 +184,8 @@ void ProcessorstateAudioProcessor::processBlock (AudioSampleBuffer& buffer, Midi
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
         for (int i = 0; i < numSamples; ++i)
             data[channel][i] = *volumeValue * Random::getSystemRandom().nextFloat();
+
+    processBlockLock.exit();
 }
 
 //==============================================================================

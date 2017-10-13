@@ -60,6 +60,8 @@ public:
     ProcessorState state{ *this };
 
 private:
+    CriticalSection processBlockLock;
+    ScopedPointer<AudioBuffer<float>> sample;
     float * volumeValue;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProcessorstateAudioProcessor)
