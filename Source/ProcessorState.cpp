@@ -26,6 +26,21 @@ ProcessorState::Parameter* ProcessorState::createAndAddParameter (const String& 
     return p;
 }
 
+void ProcessorState::addData (Data* data)
+{
+    dataItems.add(data);
+}
+
+ProcessorState::Data* ProcessorState::getData (StringRef dataID) const noexcept
+{
+    for (auto & item: dataItems)
+        if (item->getDataID() == dataID)
+            return item;
+
+    return nullptr;
+
+}
+
 ProcessorState::Parameter* ProcessorState::getParameter (StringRef parameterID) const noexcept
 {
     const int numParams = processor.getParameters().size();
@@ -68,6 +83,15 @@ ValueTree ProcessorState::toValueTree () const
         parametersTree.addChild(child, -1, nullptr);
     });
 
+    auto dataTree = root.getOrCreateChildWithName("data", nullptr);
+
+    for (auto * d : dataItems)
+    {
+        auto child = d->serialize();
+        child.setProperty("__id", d->getDataID(), nullptr);
+        dataTree.addChild(child, -1, nullptr);
+    }
+
     return root;
 }
 
@@ -84,6 +108,15 @@ void ProcessorState::load (ValueTree root) const
         else
             p->setUnnormalisedValue(p->getDefaultValue());
     });
+
+    auto dataTree = root.getOrCreateChildWithName("data", nullptr);
+
+    for (auto * d : dataItems)
+    {
+        auto child = parametersTree.getChildWithProperty("__id", d->getDataID());
+        auto result = d->setValueFromNewState(child);
+        jassert(result);
+    }
 }
 
 void ProcessorState::getStateInformation (MemoryBlock& destData) const
@@ -213,6 +246,25 @@ void ProcessorState::Parameter::callMessageThreadListeners ()
 {
     jassert(MessageManager::getInstance()->isThisTheMessageThread());
     listeners.call(&Listener::parameterChanged, paramID, value);
+}
+
+void ProcessorState::Data::notifyChanged (NotificationType notifyMessageThreadListeners)
+{
+    if (notifyMessageThreadListeners != dontSendNotification)
+        triggerAsyncUpdate();
+
+    state.notifyChangedData();
+}
+
+bool ProcessorState::Data::setValueFromNewState (ValueTree data)
+{
+    if (deserialize(data))
+    {
+        triggerAsyncUpdate();
+        return true;
+    }
+
+    return false;
 }
 
 float ProcessorState::Parameter::getValueForText (const String& text) const
