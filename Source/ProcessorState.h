@@ -123,9 +123,10 @@ public:
     int getNumSteps () const override;
     void setValue (float newValue) override;
 
+    NormalisableRange<float> getRange() const { return range; }
+
     /** Can be called from ANY thread.  */
     void setUnnormalisedValue (float newUnnormalisedValue);
-
 
     bool isMetaParameter () const override;
     bool isAutomatable () const override;
@@ -135,19 +136,19 @@ public:
     {
     public:
         virtual ~Listener ();
-        /** Will be called on the message thread */
+        /** Will only be called on the message thread */
         virtual void parameterChanged(const String & parameterId, float newValue) = 0;
     };
 
     void addListener (Listener* l);
     void removeListener (Listener* l);
 
-    NormalisableRange<float> range;
     float value;
-    float defaultValue;
 
 private:
+    NormalisableRange<float> range;
     friend class ProcessorState;
+    float defaultValue;
 
     Parameter (const String& parameterID, const String& paramName, const String& labelText,
         NormalisableRange<float> r, float defaultVal, std::function<String  (float)> valueToText,
@@ -158,7 +159,7 @@ private:
     ListenerList<Listener> listeners;
     std::function<String (float)> valueToTextFunction;
     std::function<float (const String&)> textToValueFunction;
-    Atomic<int> needsUpdate;
+    std::atomic<int> needsUpdate;
     bool listenersNeedCalling;
     const bool isMetaParam, isAutomatableParam, isDiscreteParam;
 
@@ -175,12 +176,14 @@ public:
         : slider (slider)
     {
         parameter = state.getParameter(paramID);
+
         /**
-        * paramID was not valid.  All parameters must be created before building the UI.
-        */
+         * Asserts here? paramID was not valid.  All parameters must be created
+         * before building the UI.
+         */
         jassert(parameter);
 
-        auto & r{ parameter->range };
+        auto r{ parameter->getRange() };
 
         slider.setRange (r.start, r.end, r.interval);
         slider.setSkewFactor (r.skew, r.symmetricSkew);

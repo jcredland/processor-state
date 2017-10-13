@@ -108,7 +108,9 @@ void ProcessorState::timerCallback ()
 
     forEachParameter([&](int, Parameter * p)
     {
-        if (p->needsUpdate.compareAndSetBool(0, 1))
+        int expected = 1;
+
+        if (p->needsUpdate.compare_exchange_weak(expected, 0, std::memory_order_acquire))
         {
             p->callMessageThreadListeners();
             anythingUpdated = true;
@@ -154,7 +156,7 @@ void ProcessorState::Parameter::setValue (float newValue)
         //listeners.call (&AudioProcessorValueTreeState::Listener::parameterChanged, paramID, value);
         listenersNeedCalling = false;
 
-        needsUpdate.set(1);
+        needsUpdate.store(1, std::memory_order_release);
     }
 }
 
@@ -223,5 +225,5 @@ ProcessorState::Parameter::Parameter (const String& parameterID, const String& p
     isAutomatableParam(automatable),
     isDiscreteParam(discrete)
 {
-    needsUpdate.set(1);
+    needsUpdate.store(1, std::memory_order_release);
 }
